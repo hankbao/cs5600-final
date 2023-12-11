@@ -1,9 +1,11 @@
-//! Port of the example from the `userfaultfd` manpage.
+// main.rs
+
+use std::{convert::TryInto, env};
+
 use libc::{self, c_void};
 use nix::poll::{poll, PollFd, PollFlags};
 use nix::sys::mman::{mmap, MapFlags, ProtFlags};
 use nix::unistd::{sysconf, SysconfVar};
-use std::{convert::TryInto, env};
 use userfaultfd::{Event, Uffd, UffdBuilder};
 
 fn fault_handler_thread(uffd: Uffd) {
