@@ -7,5 +7,13 @@ edition = "2021"
 
 [dependencies]
 libc = "0.2.65"
-nix = { version = "0.27", features = ["ioctl"] }
-userfaultfd-sys = "^0.5.0"
+nix = { version = "0.27", features = [
+    "feature",
+    "ioctl",
+    "mman",
+    "poll",
+    "process",
+    "signal",
+] }
+sendfd = "0.4.3"
+userfaultfd = "^0.7"
