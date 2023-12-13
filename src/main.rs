@@ -186,7 +186,7 @@ fn main() {
             }
         }
         Ok(ForkResult::Child) => {
-            child(len, page_size, &sock_path);
+            child(len, &sock_path);
         }
         Err(e) => {
             die("fork()", e);
@@ -226,7 +226,7 @@ fn get_uffd(stream: UnixStream) -> Uffd {
     }
 }
 
-fn child(len: usize, page_size: usize, sock_path: &String) {
+fn child(len: usize, sock_path: &String) {
     println!("<pid:{}> child is entering...", getpid());
 
     // Create and enable userfaultfd object
@@ -275,7 +275,7 @@ fn child(len: usize, page_size: usize, sock_path: &String) {
     let mut l = 0xf;
     let delta = 1024;
 
-    while l < page_size {
+    while l < len {
         let ptr = (addr as usize + l) as *mut u8;
         let c = unsafe { *ptr };
         println!("<pid:{}> read address {:p}: {:?}", getpid(), ptr, c as char);
