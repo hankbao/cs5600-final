@@ -17,11 +17,27 @@ use std::{
 use libc::{self, c_void};
 use nix::poll::{poll, PollFd, PollFlags};
 use nix::sys::mman::{mmap, MapFlags, ProtFlags};
+use nix::sys::signal::{sigprocmask, SigSet, SigmaskHow, Signal};
+use nix::sys::signalfd::{SfdFlags, SignalFd};
 use nix::unistd::{fork, getpid, sysconf, ForkResult, SysconfVar};
 use sendfd::{RecvWithFd, SendWithFd};
 use userfaultfd::{Event, Uffd, UffdBuilder};
 
 fn page_fault_handler(uffd: Uffd, page_size: usize) {
+    // Block SIGCHLD
+    let mut sigset = SigSet::empty();
+    sitset.add(Signal::SIGCHLD);
+    if let Err(e) = sigprocmask(SigmaskHow::SIG_BLOCK, Some(&sigset), None) {
+        die("sigprocmask()", e);
+    }
+
+    // Create a signalfd for SIGCHLD
+    let sigfd = match SignalFd::with_flags(&sigset, SfdFlags::SFD_NONBLOCK | SfdFlags::SFD_CLOEXEC)
+    {
+        Ok(sf) => sf,
+        Err(e) => die("SignalFd::with_flags()", e),
+    };
+
     // Create a page that will be copied into the faulting region
     let page = unsafe { mmap_anon(page_size) };
 
@@ -29,68 +45,74 @@ fn page_fault_handler(uffd: Uffd, page_size: usize) {
     let mut fault_cnt = 0;
     loop {
         // See what poll() tells us about the userfaultfd
-        let mut fds = [PollFd::new(&uffd, PollFlags::POLLIN)];
-        let nready = match poll(&mut fds, -1) {
-            Ok(n) => n,
-            Err(e) => {
-                die("poll", e);
-            }
-        };
-        let pollfd = fds[0];
+        let mut fds = [
+            PollFd::new(&uffd, PollFlags::POLLIN),
+            PollFd::new(&sigfd, PollFlags::POLLIN),
+        ];
+        if let Err(e) = poll(&mut fds, -1) {
+            die("poll", e);
+        }
 
-        let revents = match pollfd.revents() {
-            Some(e) => e,
-            None => {
-                die("pollfd.revents()", "returned None unexpectedly");
-            }
-        };
-        println!(
-            "<pid:{}> poll() returns: nready = {}; POLLIN = {}; POLLERR = {}",
-            getpid(),
-            nready,
-            revents.contains(PollFlags::POLLIN),
-            revents.contains(PollFlags::POLLERR),
-        );
-
-        // Read an event from the userfaultfd
-        let event = match uffd.read_event() {
-            Ok(Some(e)) => e,
-            Ok(None) => die("uffd.read_event()", "returned None after poll() notified"),
-            Err(e) => die("uffd.read_event()", e),
-        };
-
-        // We expect only one kind of event; verify that assumption
-        if let Event::Pagefault { addr, .. } = event {
-            // Display info about the page-fault event
-
-            println!(
-                "<pid:{}>    UFFD_EVENT_PAGEFAULT event: {:?}",
-                getpid(),
-                event
-            );
-
-            // Copy the page pointed to by 'page' into the faulting region. Vary the contents that are
-            // copied in, so that it is more obvious that each fault is handled separately.
-            for c in unsafe { slice::from_raw_parts_mut(page as *mut u8, page_size) } {
-                *c = b'A' + fault_cnt % 20;
-            }
-            fault_cnt += 1;
-
-            let dst = (addr as usize & !(page_size - 1)) as *mut c_void;
-            let copied = unsafe {
-                match uffd.copy(page, dst, page_size, true) {
-                    Ok(size) => size,
-                    Err(e) => die("uffd.copy()", e),
-                }
+        for pollfd in &fds {
+            let revents = match pollfd.revents() {
+                Some(e) => e,
+                None => die("pollfd.revents()", "returned None unexpectedly"),
             };
+            if !revents.contains(PollFlags::POLLIN) {
+                continue;
+            }
 
-            println!(
-                "<pid:{}>        (uffdio_copy.copy returned {})",
-                getpid(),
-                copied
-            );
-        } else {
-            die("uffd.read_event", format!("unexpected event {:?}", event));
+            if (pollfd.fd() == uffd.as_raw_fd()) {
+                // Read an event from the userfaultfd
+                let event = match uffd.read_event() {
+                    Ok(Some(e)) => e,
+                    Ok(None) => die("uffd.read_event()", "returned None after poll() notified"),
+                    Err(e) => die("uffd.read_event()", e),
+                };
+
+                // We expect only one kind of event; verify that assumption
+                if let Event::Pagefault { addr, .. } = event {
+                    // Display info about the page-fault event
+
+                    println!(
+                        "<pid:{}>    UFFD_EVENT_PAGEFAULT event: {:?}",
+                        getpid(),
+                        event
+                    );
+
+                    // Copy the page pointed to by 'page' into the faulting region. Vary the contents that are
+                    // copied in, so that it is more obvious that each fault is handled separately.
+                    for c in unsafe { slice::from_raw_parts_mut(page as *mut u8, page_size) } {
+                        *c = b'A' + fault_cnt % 20;
+                    }
+                    fault_cnt += 1;
+
+                    let dst = (addr as usize & !(page_size - 1)) as *mut c_void;
+                    let copied = unsafe {
+                        match uffd.copy(page, dst, page_size, true) {
+                            Ok(size) => size,
+                            Err(e) => die("uffd.copy()", e),
+                        }
+                    };
+
+                    println!(
+                        "<pid:{}>        (uffdio_copy.copy returned {})",
+                        getpid(),
+                        copied
+                    );
+                } else {
+                    die("uffd.read_event", format!("unexpected event {:?}", event));
+                }
+            } else if pollfd.fd() == sigfd.as_raw_fd() {
+                match sigfd.read_signal() {
+                    Ok(Some(_)) => {
+                        println!("<pid:{}>    got signal SIGCHLD", getpid());
+                        return;
+                    }
+                    Ok(None) => die("sigfd.read_signal()", "returned None after poll() notified"),
+                    Err(e) => die("sigfd.read_signal()", e),
+                }
+            }
         }
     }
 }
@@ -227,11 +249,15 @@ fn child(len: usize, page_size: usize, sock_path: &String) {
 
     let socket = match UnixStream::connect(sock_path) {
         Ok(s) => s,
-        Err(e) => die("UnixStream::connect", e),
+        Err(e) => die("UnixStream::connect()", e),
     };
 
     if let Err(e) = socket.send_with_fd(&mut vec![0; 64], &[uffd.as_raw_fd()]) {
-        die("socket.send_with_fd", e);
+        die("socket.send_with_fd()", e);
+    }
+
+    if let Err(e) = socket.shutdown(Shutdown::Both) {
+        die("socket.shutdown()", e);
     }
 
     // Children now touch memory in the mapping, touching locations 1024 bytes apart. This will
