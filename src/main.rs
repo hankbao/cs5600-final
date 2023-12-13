@@ -3,17 +3,11 @@
 // the page_fault_handler now monitors the PF in child processes
 // author: Hank Bao
 
+use std::convert::TryInto;
+use std::net::Shutdown;
+use std::os::fd::{AsFd, AsRawFd, FromRawFd};
 use std::os::unix::net::{UnixListener, UnixStream};
-use std::{
-    convert::TryInto,
-    env, fs,
-    net::Shutdown,
-    os::{
-        self,
-        fd::{AsFd, AsRawFd, FromRawFd},
-    },
-    process, slice, thread, time,
-};
+use std::{env, fs, os, process, slice, thread, time};
 
 use libc::{self, c_void};
 use nix::poll::{poll, PollFd, PollFlags};
