@@ -45,7 +45,7 @@ A Unix domain socket is used to pass the `userfaultfd` file descriptor from the 
 
 ### Handling loop
 
-The parent process enters a loop where it uses `poll` to wait for events on both the `userfaultfd` and `signalfd`. When a page fault occurs, the parent process handles it by providing a memory page. When a `SIGCHLD` signal is received, the parent process handles the signal.
+The parent process enters a loop where it uses `poll` to wait for events on both the `userfaultfd` and `signalfd`. When a page fault occurs, the parent process handles it by providing a memory page. When a `SIGCHLD` signal is received, the parent process handles the signal by exiting the loop and terminating the program.
 
 ## Test Run
 
@@ -131,7 +131,7 @@ The program is run with 10 pages as the argument specified. The child process ac
 
 The child process creates a memory mapping and reports the starting address. The parent process handles page faults triggered by the child process. Each line beginning with `<pid:20295> UFFD_EVENT_PAGEFAULT event:` indicates a page fault handled by the parent. The address `addr` shows where the fault occurred. The parent process varies the data ('A', 'B', 'C', etc.) it copies into the faulting region on each fault, as indicated by the changing letters in the child's output.
 
-When the child exits, the parent process receives a SIGCHLD signal, indicating that the child process (PID 20297) has exited. The parent then exits as well.
+When the child exits, the parent process receives a `SIGCHLD` signal, indicating that the child process (PID 20297) has exited. The parent then exits as well.
 
 ## Future Works
 
