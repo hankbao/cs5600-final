@@ -10,7 +10,7 @@ use std::{
     net::Shutdown,
     os::{
         self,
-        fd::{AsRawFd, FromRawFd},
+        fd::{AsFd, AsRawFd, FromRawFd},
     },
     process, slice, thread, time,
 };
