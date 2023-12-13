@@ -107,8 +107,12 @@ fn page_fault_handler(uffd: Uffd, page_size: usize) {
             } else if pollfd.as_fd().as_raw_fd() == sigfd.as_raw_fd() {
                 match sigfd.read_signal() {
                     Ok(Some(siginfo)) => {
-                        println!("<pid:{}> got signal SIGCHLD", getpid());
-                        println!("<pid:{}>    siginfo: {:?}", getpid(), siginfo);
+                        assert!(siginfo.ssi_signo == Signal::SIGCHLD);
+                        println!(
+                            "<pid:{}> got signal SIGCHLD from child {}",
+                            getpid(),
+                            siginfo.ssi_pid
+                        );
                         return;
                     }
                     Ok(None) => die("sigfd.read_signal()", "returned None after poll() notified"),
@@ -134,7 +138,7 @@ fn main() {
         usage();
     };
 
-    println!("<pid:{}> parent entering", getpid());
+    println!("<pid:{}> parent is entering...", getpid());
 
     let page_size = match sysconf(SysconfVar::PAGE_SIZE) {
         Ok(Some(size)) => {
@@ -159,6 +163,8 @@ fn main() {
     // Create a child process to access the memory
     match unsafe { fork() } {
         Ok(ForkResult::Parent { .. }) => {
+            println!("<pid:{}> forked", getpid());
+
             let listener = match UnixListener::bind(&sock_path) {
                 Ok(l) => l,
                 Err(e) => die("UnixListener::bind()", e),
@@ -175,7 +181,7 @@ fn main() {
             if let Err(e) = fs::remove_file(sock_path) {
                 die("fs::remove_file()", e);
             } else {
-                println!("<pid:{}> parent exiting", getpid());
+                println!("<pid:{}> parent is exiting...", getpid());
                 process::exit(0);
             }
         }
@@ -221,7 +227,7 @@ fn get_uffd(stream: UnixStream) -> Uffd {
 }
 
 fn child(len: usize, page_size: usize, sock_path: &String) {
-    println!("<pid:{}> child entering", getpid());
+    println!("<pid:{}> child is entering...", getpid());
 
     // Create and enable userfaultfd object
     let uffd = match UffdBuilder::new()
@@ -280,7 +286,7 @@ fn child(len: usize, page_size: usize, sock_path: &String) {
         l += delta;
     }
 
-    println!("<pid:{}> child exiting", getpid());
+    println!("<pid:{}> child is exiting...", getpid());
     process::exit(0);
 }
 
