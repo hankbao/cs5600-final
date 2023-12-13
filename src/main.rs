@@ -33,11 +33,11 @@ fn page_fault_handler(uffd: Uffd, page_size: usize) {
     }
 
     // Create a signalfd for SIGCHLD
-    let sigfd = match SignalFd::with_flags(&sigset, SfdFlags::SFD_NONBLOCK | SfdFlags::SFD_CLOEXEC)
-    {
-        Ok(sf) => sf,
-        Err(e) => die("SignalFd::with_flags()", e),
-    };
+    let mut sigfd =
+        match SignalFd::with_flags(&sigset, SfdFlags::SFD_NONBLOCK | SfdFlags::SFD_CLOEXEC) {
+            Ok(sf) => sf,
+            Err(e) => die("SignalFd::with_flags()", e),
+        };
 
     // Create a page that will be copied into the faulting region
     let page = unsafe { mmap_anon(page_size) };
@@ -63,7 +63,7 @@ fn page_fault_handler(uffd: Uffd, page_size: usize) {
                 continue;
             }
 
-            if pollfd.as_fd() == uffd.as_raw_fd() {
+            if pollfd.as_fd().as_raw_fd() == uffd.as_raw_fd() {
                 // Read an event from the userfaultfd
                 let event = match uffd.read_event() {
                     Ok(Some(e)) => e,
@@ -104,10 +104,11 @@ fn page_fault_handler(uffd: Uffd, page_size: usize) {
                 } else {
                     die("uffd.read_event", format!("unexpected event {:?}", event));
                 }
-            } else if pollfd.as_fd() == sigfd.as_raw_fd() {
+            } else if pollfd.as_fd().as_raw_fd() == sigfd.as_raw_fd() {
                 match sigfd.read_signal() {
-                    Ok(Some(_)) => {
-                        println!("<pid:{}>    got signal SIGCHLD", getpid());
+                    Ok(Some(siginfo)) => {
+                        println!("<pid:{}> got signal SIGCHLD", getpid());
+                        println!("<pid:{}>    siginfo: {:?}", getpid(), siginfo);
                         return;
                     }
                     Ok(None) => die("sigfd.read_signal()", "returned None after poll() notified"),
@@ -137,7 +138,7 @@ fn main() {
 
     let page_size = match sysconf(SysconfVar::PAGE_SIZE) {
         Ok(Some(size)) => {
-            println!("PAGE_SIZE is {}", size);
+            println!("<pid:{}> PAGE_SIZE is {}", getpid(), size);
             size as usize
         }
         Ok(None) => {
@@ -174,6 +175,7 @@ fn main() {
             if let Err(e) = fs::remove_file(sock_path) {
                 die("fs::remove_file()", e);
             } else {
+                println!("<pid:{}> parent exiting", getpid());
                 process::exit(0);
             }
         }
@@ -205,9 +207,7 @@ fn get_uffd(stream: UnixStream) -> Uffd {
     let mut buff = vec![0; 64];
     match stream.recv_with_fd(&mut buff, &mut fds) {
         Ok((_, n)) => {
-            println!("<pid:{}> recv_with_fd ok", getpid());
             if n == 1 {
-                println!("<pid:{}> got uffd fd", getpid());
                 unsafe { Uffd::from_raw_fd(fds[0]) }
             } else {
                 die(
