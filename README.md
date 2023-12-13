@@ -8,7 +8,7 @@ A significant part of the project involved utilizing `userfaultfd` to detect pag
 
 In conjunction with `userfaultfd`, the project also employed `signalfd` for efficient signal handling, specifically focusing on the `SIGCHLD` signal. This integration aimed to monitor and respond to state changes in child processes, such as termination or interruption, thereby enhancing the robustness and reliability of the parent process in managing its child processes. The use of `signalfd` showcased an effective method for signal management in user space, reducing the complexity and overhead typically associated with signal handling in multi-threaded applications.
 
-Overall, this project contributes to the field by demonstrating the practical applications and benefits of `userfaultfd` and `signalfd` in complex memory and process management scenarios. The insights gained from this exploration have significant implications for the development of efficient, reliable, and scalable system-level applications in Linux environments. The techniques and methodologies developed in this project pave the way for further research and innovation in user space memory management and inter-process communication mechanisms.
+Overall, this project demonstrates the practical applications and benefits of `userfaultfd` and `signalfd` in complex memory and process management scenarios. The insights gained from this exploration have significant implications for the development of efficient, reliable, and scalable system-level applications in Linux environments. The techniques and methodologies developed in this project pave the way for further research and innovation in user space memory management and inter-process communication mechanisms.
 
 ## Usage
 
