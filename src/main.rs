@@ -107,7 +107,7 @@ fn page_fault_handler(uffd: Uffd, page_size: usize) {
             } else if pollfd.as_fd().as_raw_fd() == sigfd.as_raw_fd() {
                 match sigfd.read_signal() {
                     Ok(Some(siginfo)) => {
-                        assert!(siginfo.ssi_signo == Signal::SIGCHLD);
+                        assert!(siginfo.ssi_signo == Signal::SIGCHLD as u32);
                         println!(
                             "<pid:{}> got signal SIGCHLD from child {}",
                             getpid(),
