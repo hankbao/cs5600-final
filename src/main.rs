@@ -7,6 +7,7 @@ use std::os::unix::net::{UnixListener, UnixStream};
 use std::{
     convert::TryInto,
     env, fs,
+    net::Shutdown,
     os::{
         self,
         fd::{AsRawFd, FromRawFd},
@@ -26,7 +27,7 @@ use userfaultfd::{Event, Uffd, UffdBuilder};
 fn page_fault_handler(uffd: Uffd, page_size: usize) {
     // Block SIGCHLD
     let mut sigset = SigSet::empty();
-    sitset.add(Signal::SIGCHLD);
+    sigset.add(Signal::SIGCHLD);
     if let Err(e) = sigprocmask(SigmaskHow::SIG_BLOCK, Some(&sigset), None) {
         die("sigprocmask()", e);
     }
@@ -62,7 +63,7 @@ fn page_fault_handler(uffd: Uffd, page_size: usize) {
                 continue;
             }
 
-            if (pollfd.fd() == uffd.as_raw_fd()) {
+            if pollfd.as_fd() == uffd.as_raw_fd() {
                 // Read an event from the userfaultfd
                 let event = match uffd.read_event() {
                     Ok(Some(e)) => e,
@@ -103,7 +104,7 @@ fn page_fault_handler(uffd: Uffd, page_size: usize) {
                 } else {
                     die("uffd.read_event", format!("unexpected event {:?}", event));
                 }
-            } else if pollfd.fd() == sigfd.as_raw_fd() {
+            } else if pollfd.as_fd() == sigfd.as_raw_fd() {
                 match sigfd.read_signal() {
                     Ok(Some(_)) => {
                         println!("<pid:{}>    got signal SIGCHLD", getpid());
