@@ -2,7 +2,7 @@
 
 ## Abstract
 
-This report presents the development and implementation of a user space paging program in Rust, an innovative project leveraging the capabilities of `userfaultfd` and `signalfd` within the Linux operating system. The primary objective of this project was to explore and harness the potential of `userfaultfd` for monitoring and handling page faults occurring in child processes. Paging normally happens in the kernel level, but relatively underused in conventional programming practices. By intercepting page faults at the user level, the program demonstrates a feasible method for managing memory access and handling in a multi-process environment.
+This report presents the development and implementation of a user space paging program in Rust, an innovative project leveraging the capabilities of `userfaultfd` and `signalfd` within the Linux operating system. The primary objective of this project was to explore and harness the potential of `userfaultfd` for monitoring and handling page faults occurring in child processes. Paging normally happens at the kernel level but is relatively underused in conventional programming practices. By intercepting page faults at the user level, the program demonstrates a feasible method for managing memory access and handling in a multi-process environment.
 
 A significant part of the project involved utilizing `userfaultfd` to detect page faults in child processes. This mechanism allowed for the control of page fault handling from the parent process, enabling a responsive and customizable reaction to memory access patterns in child processes. The implementation focused on creating user-defined responses to page faults, such as providing copies of data from specified locations, thereby introducing a layer of flexibility and control in memory management.
 
@@ -21,7 +21,7 @@ Usage: paging <num_pages>
 
 ## Design and Implementation
 
-This project demonstrates an use of `userfaultfd` and `signalfd` to handle page faults and signals, respectively, in a multi-process context. The main goal is to monitor page faults (**PF**) in child processes and handle `SIGCHLD` signals in the parent process. This involves setting up communication between the parent and child processes and managing shared resources effectively.
+This project demonstrates the use of `userfaultfd` and `signalfd` to handle page faults and signals, respectively, in a multi-process context. The main goal is to monitor page faults (**PF**) in child processes and handle `SIGCHLD` signals in the parent process. This involves setting up communication between the parent and child processes and managing shared resources effectively.
 
 ### Setup `userfaultfd`
 
@@ -33,7 +33,7 @@ I use `mmap` to allocate memory regions in both parent and child processes. The 
 
 ### Memory access in child processes
 
-The child process intentionally access the memory region to trigger page faults. These faults are then caught and handled by the parent process through the `userfaultfd` mechanism.
+The child process intentionally accesses the memory region to trigger page faults. These faults are then caught and handled by the parent process through the `userfaultfd` mechanism.
 
 ### Handle signals with `signalfd`
 
