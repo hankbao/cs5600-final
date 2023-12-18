@@ -243,7 +243,6 @@ fn child(len: usize, sock_path: &String) {
     // Register the memory range of the mapping we just created for handling by the userfaultfd
     // object. In mode, we request to track missing pages (i.e., pages that have not yet been
     // faulted in).
-
     if let Err(e) = uffd.register(addr, len) {
         die("uffd.register()", e);
     }
